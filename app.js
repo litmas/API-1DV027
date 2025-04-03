@@ -25,6 +25,9 @@ process.removeAllListeners('warning');
 // Connect to database
 connectDB();
 
+// Trust Railway's proxy (MUST come before rate limiter)
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+
 // Middleware
 app.use(cors());
 app.use(helmet());
@@ -32,9 +35,14 @@ app.use(mongoSanitize());
 app.use(xss());
 app.use(hpp());
 
+// Rate limiting with proxy support
 const limiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 100
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  message: 'Too many requests from this IP, please try again later',
+  validate: { trustProxy: true }, // Required for Railway
+  standardHeaders: true, // Return rate limit info in headers
+  legacyHeaders: false, // Disable deprecated headers
 });
 app.use(limiter);
 
@@ -44,6 +52,16 @@ app.use(express.json({ limit: '10kb' }));
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  res.status(200).json({
+    status: 'ok',
+    database: dbStatus,
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
 
 // API Documentation
 const swaggerOptions = {
@@ -88,7 +106,8 @@ app.get('/', (req, res) => {
       movies: '/api/v1/movies',
       actors: '/api/v1/actors',
       ratings: '/api/v1/ratings',
-      documentation: '/api-docs'
+      documentation: '/api-docs',
+      health: '/health'
     }
   });
 });
@@ -104,7 +123,6 @@ app.use(errorHandler);
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled Rejection:', err);
-  // Close server and exit process
   server.close(() => process.exit(1));
 });
 
