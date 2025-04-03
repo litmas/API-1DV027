@@ -2,7 +2,6 @@ const Movie = require('../models/Movie');
 const Rating = require('../models/Rating');
 const AppError = require('../utils/appError');
 const APIFeatures = require('../utils/apiFeatures');
-const APIFeatures = require('../utils/pagination');
 const { addHATEOASLinks } = require('../utils/hateoas');
 
 exports.getAllMovies = async (req, res, next) => {
